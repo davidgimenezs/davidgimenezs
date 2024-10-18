@@ -6,5 +6,5 @@
 </a>
 
 <a href="https://www.credly.com/badges/f390fa7a-fa3f-4efc-8690-c659ceb3161e/public_url">
-    <img src="https://images.credly.com/images/d64b24d8-66f3-435a-bc76-2d70c26b0d67/image.png" alt="Credly Badge" width="64" height="64">
+    <img src="https://images.credly.com/images/d64b24d8-66f3-435a-bc76-2d70c26b0d67/image.png" alt="Credly Badge" width="128" height="128">
 </a>
