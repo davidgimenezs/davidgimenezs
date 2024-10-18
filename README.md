@@ -5,10 +5,6 @@
   </picture>
 </a>
 
-# My Achievements
-
-Here is one of my badges from Credly:
-
-[![Credly Badge](https://images.credly.com/images/d64b24d8-66f3-435a-bc76-2d70c26b0d67/image.png)](https://www.credly.com/badges/f390fa7a-fa3f-4efc-8690-c659ceb3161e/public_url)
-
-
+<a href="https://www.credly.com/badges/f390fa7a-fa3f-4efc-8690-c659ceb3161e/public_url">
+    <img src="https://images.credly.com/images/d64b24d8-66f3-435a-bc76-2d70c26b0d67/image.png" alt="Credly Badge" width="150" height="150">
+</a>
