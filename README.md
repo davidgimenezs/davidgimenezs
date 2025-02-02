@@ -5,14 +5,14 @@
   </picture>
 </a>
 
-<table style="width:100%; border: none;">
+<table style="width:100%; border-collapse: collapse; border: none;">
   <tr>
-    <td style="vertical-align: middle; text-align: center;">
+    <td style="vertical-align: middle; text-align: center; border: none;">
         <a href="https://www.credly.com/badges/f390fa7a-fa3f-4efc-8690-c659ceb3161e/public_url">
             <img src="https://images.credly.com/images/d64b24d8-66f3-435a-bc76-2d70c26b0d67/image.png" alt="NASA Open Science Badge" width="128" height="128">
         </a>
     </td>
-    <td style="vertical-align: middle; padding-left: 20px;">
+    <td style="vertical-align: middle; padding-left: 20px; border: none;">
         <h3>NASA Open Science Badge</h3>
         <p><b>Issued by:</b> NASA Transform to Open Science</p>
         <p>
@@ -21,7 +21,6 @@
     </td>
   </tr>
 </table>
-
     <h2>Programming Languages</h2>
     <p>
         <a href="https://skillicons.dev">
