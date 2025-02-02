@@ -5,7 +5,7 @@
   </picture>
 </a>
 
-<div align="center">
+<div>
     <a href="https://www.credly.com/badges/f390fa7a-fa3f-4efc-8690-c659ceb3161e/public_url">
         <img src="https://images.credly.com/images/d64b24d8-66f3-435a-bc76-2d70c26b0d67/image.png" alt="NASA Open Science Badge" width="128" height="128">
     </a>
@@ -14,43 +14,40 @@
     <p>
         Transform to Open Science (TOPS) is a transformative initiative by NASA aimed at advancing open science practices, promoting transparency, and maximizing the impact of scientific research. By fostering collaboration and providing training and resources, TOPS empowers researchers to embrace open science principles and revolutionize the way science is conducted. TOPS is part of NASA’s Open Source Science Initiative within the agency’s Science Mission Directorate.
     </p>
-<h2>Programming Languages</h2>
-<p>
-    <a href="https://skillicons.dev">
-        <img src="https://skillicons.dev/icons?i=c,cpp,html,java,py" />
-    </a>
-</p>
-
-<h2>Technologies and Frameworks</h2>
-<p>
-    <a href="https://skillicons.dev">
-        <img src="https://skillicons.dev/icons?i=azure,discordjs,react,vue,flutter,nodejs,aws,gcp" />
-    </a>
-</p>
-<h2>Design Software</h2>
-<p>
-    <a href="https://skillicons.dev">
-        <img src="https://skillicons.dev/icons?i=figma,sketchup,ps,autocad" />
-    </a>
-</p>
-<h2>Tools & Platforms</h2>
-<p>
-    <a href="https://skillicons.dev">
-        <img src="https://skillicons.dev/icons?i=git,github,codepen,vscode" />
-    </a>
-</p>
-<h2>Social Media & Communication</h2>
-<p>
-    <a href="https://skillicons.dev">
-        <img src="https://skillicons.dev/icons?i=discord,linkedin,instagram,twitter,gmail" />
-    </a>
-</p>
-<h2>Miscellaneous</h2>
-<p>
-    <a href="https://skillicons.dev">
-        <img src="https://skillicons.dev/icons?i=arduino,raspberrypi,ai,latex,md" />
-    </a>
-</p>
-
-
+    <h2>Programming Languages</h2>
+    <p>
+        <a href="https://skillicons.dev">
+            <img src="https://skillicons.dev/icons?i=c,cpp,html,java,py" />
+        </a>
+    </p>
+    <h2>Technologies and Frameworks</h2>
+    <p>
+        <a href="https://skillicons.dev">
+            <img src="https://skillicons.dev/icons?i=azure,discordjs,react,vue,flutter,nodejs,aws,gcp" />
+        </a>
+    </p>
+    <h2>Design Software</h2>
+    <p>
+        <a href="https://skillicons.dev">
+            <img src="https://skillicons.dev/icons?i=figma,sketchup,ps,autocad" />
+        </a>
+    </p>
+    <h2>Tools & Platforms</h2>
+    <p>
+        <a href="https://skillicons.dev">
+            <img src="https://skillicons.dev/icons?i=git,github,codepen,vscode" />
+        </a>
+    </p>
+    <h2>Social Media & Communication</h2>
+    <p>
+        <a href="https://skillicons.dev">
+            <img src="https://skillicons.dev/icons?i=discord,linkedin,instagram,twitter,gmail" />
+        </a>
+    </p>
+    <h2>Miscellaneous</h2>
+    <p>
+        <a href="https://skillicons.dev">
+            <img src="https://skillicons.dev/icons?i=arduino,raspberrypi,ai,latex,md" />
+        </a>
+    </p>
 </div>
