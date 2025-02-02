@@ -20,6 +20,7 @@
         <img src="https://skillicons.dev/icons?i=c,cpp,html,java,py" />
     </a>
 </p>
+
 <h2>Technologies and Frameworks</h2>
 <p>
     <a href="https://skillicons.dev">
