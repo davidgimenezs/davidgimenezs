@@ -10,7 +10,7 @@
     <!-- First column for badge with fixed size -->
     <td style="vertical-align: middle; text-align: center; border: none; width: 150px; height: 150px;">
         <a href="https://www.credly.com/badges/f390fa7a-fa3f-4efc-8690-c659ceb3161e/public_url">
-            <img src="https://images.credly.com/images/d64b24d8-66f3-435a-bc76-2d70c26b0d67/image.png" alt="NASA Open Science Badge" width="128" height="128" style="border-radius: 50%;">
+            <img src="https://images.credly.com/images/d64b24d8-66f3-435a-bc76-2d70c26b0d67/image.png" alt="NASA Open Science Badge" style="border-radius: 50%; max-width: 128px; max-height: 128px; width: auto; height: auto;">
         </a>
     </td>
     <!-- Second column for description -->
@@ -23,6 +23,7 @@
     </td>
   </tr>
 </table>
+
     <h2>Programming Languages</h2>
     <p>
         <a href="https://skillicons.dev">
