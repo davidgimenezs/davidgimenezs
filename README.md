@@ -15,7 +15,7 @@
       </a>
     </td>
     <td style="vertical-align: middle; padding-left: 20px; border: none;">
-      <h3 style="margin-top: 0; margin-bottom: 10px;">NASA Open Science Badge</h3>
+      <h3>NASA Open Science Badge</h3>
       <p><b>Issued by:</b> NASA Transform to Open Science</p>
       <p>
         Transform to Open Science (TOPS) is a transformative initiative by NASA aimed at advancing open science practices, promoting transparency, and maximizing the impact of scientific research. By fostering collaboration and providing training and resources, TOPS empowers researchers to embrace open science principles and revolutionize the way science is conducted. TOPS is part of NASA’s Open Source Science Initiative within the agency’s Science Mission Directorate.
