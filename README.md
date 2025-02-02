@@ -14,10 +14,42 @@
     <p>
         Transform to Open Science (TOPS) is a transformative initiative by NASA aimed at advancing open science practices, promoting transparency, and maximizing the impact of scientific research. By fostering collaboration and providing training and resources, TOPS empowers researchers to embrace open science principles and revolutionize the way science is conducted. TOPS is part of NASA’s Open Source Science Initiative within the agency’s Science Mission Directorate.
     </p>
-  <h2>Programming Languages</h2>
-  <p align="center">
+<h2>Programming Languages</h2>
+<p>
     <a href="https://skillicons.dev">
-      <img src="https://skillicons.dev/icons?i=c,cpp,html,java,py" />
+        <img src="https://skillicons.dev/icons?i=c,cpp,html,java,py" />
     </a>
-  </p>
+</p>
+<h2>Technologies and Frameworks</h2>
+<p>
+    <a href="https://skillicons.dev">
+        <img src="https://skillicons.dev/icons?i=azure,discordjs,react,vue,flutter,nodejs,aws,gcp" />
+    </a>
+</p>
+<h2>Design Software</h2>
+<p>
+    <a href="https://skillicons.dev">
+        <img src="https://skillicons.dev/icons?i=figma,sketchup,ps,autocad" />
+    </a>
+</p>
+<h2>Tools & Platforms</h2>
+<p>
+    <a href="https://skillicons.dev">
+        <img src="https://skillicons.dev/icons?i=git,github,codepen,vscode" />
+    </a>
+</p>
+<h2>Social Media & Communication</h2>
+<p>
+    <a href="https://skillicons.dev">
+        <img src="https://skillicons.dev/icons?i=discord,linkedin,instagram,twitter,gmail" />
+    </a>
+</p>
+<h2>Miscellaneous</h2>
+<p>
+    <a href="https://skillicons.dev">
+        <img src="https://skillicons.dev/icons?i=arduino,raspberrypi,ai,latex,md" />
+    </a>
+</p>
+
+
 </div>
