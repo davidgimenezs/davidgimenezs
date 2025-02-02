@@ -14,7 +14,7 @@
     <p>
         Transform to Open Science (TOPS) is a transformative initiative by NASA aimed at advancing open science practices, promoting transparency, and maximizing the impact of scientific research. By fostering collaboration and providing training and resources, TOPS empowers researchers to embrace open science principles and revolutionize the way science is conducted. TOPS is part of NASA’s Open Source Science Initiative within the agency’s Science Mission Directorate.
     </p>
-    <h3>Programming Languages</h3>
+    <h2>Programming Languages</h2>
     <hr>
   <p align="center">
   <a href="https://skillicons.dev">
