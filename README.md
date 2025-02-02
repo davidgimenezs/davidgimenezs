@@ -7,11 +7,13 @@
 
 <table style="width:100%; border-collapse: collapse; border: none;">
   <tr>
-    <td style="vertical-align: middle; text-align: center; border: none;">
+    <!-- First column for badge with fixed size -->
+    <td style="vertical-align: middle; text-align: center; border: none; width: 150px; height: 150px;">
         <a href="https://www.credly.com/badges/f390fa7a-fa3f-4efc-8690-c659ceb3161e/public_url">
-            <img src="https://images.credly.com/images/d64b24d8-66f3-435a-bc76-2d70c26b0d67/image.png" alt="NASA Open Science Badge" width="128" height="128">
+            <img src="https://images.credly.com/images/d64b24d8-66f3-435a-bc76-2d70c26b0d67/image.png" alt="NASA Open Science Badge" width="128" height="128" style="border-radius: 50%;">
         </a>
     </td>
+    <!-- Second column for description -->
     <td style="vertical-align: middle; padding-left: 20px; border: none;">
         <h3>NASA Open Science Badge</h3>
         <p><b>Issued by:</b> NASA Transform to Open Science</p>
