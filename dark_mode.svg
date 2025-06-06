@@ -92,6 +92,9 @@ text, tspan {white-space: pre;}
 <tspan x="370" y="470">——————</tspan>
 <tspan x="370" y="490" class="keyColor">Repos</tspan>: <tspan class="valueColor">9 </tspan> {<tspan class="keyColor">Contributed</tspan>: <tspan class="valueColor">17</tspan>}  | <tspan class="keyColor">Commmits</tspan>: <tspan class="valueColor">333    </tspan>| <tspan class="keyColor">Stars</tspan>: <tspan class="valueColor">1</tspan>
 <tspan x="370" y="510" class="keyColor">Followers</tspan>: <tspan class="valueColor">4   </tspan>| <tspan class="keyColor">Lines of Code</tspan>: <tspan class="valueColor">205,700</tspan> (<tspan class="addColor">241,125++</tspan>, <tspan class="delColor">35,425--</tspan>)
+<<<<<<< HEAD
+>>>>>>> parent of 4256560 (Updated README)
+=======
 >>>>>>> parent of 4256560 (Updated README)
 </text>
 </svg>
