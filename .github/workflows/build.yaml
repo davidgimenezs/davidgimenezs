@@ -10,15 +10,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v2
         with:
           fetch-depth: 1
       - name: Get Python 3.8
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v2
         with:
           python-version: '3.8'
       - name: Configure pip cache
-        uses: actions/cache@v4
+        uses: actions/cache@v2
         with:
           path: ~/.cache/pip
           key: ${{ runner.os }}-pip-${{ hashFiles('**/cache/requirements.txt') }}
@@ -34,7 +34,7 @@ jobs:
         run: |-
           git add .
           git diff
-          git config --global user.email "github-actions-bot@davidgimenezs.github.io"
-          git config --global user.name "davidgimenezs/GitHub-Actions-Bot"
+          git config --global user.email "github-actions-bot@andrew6rant.github.io"
+          git config --global user.name "Andrew6rant/GitHub-Actions-Bot"
           git commit -m "Updated README" -a || echo "No changes to commit"
           git push
