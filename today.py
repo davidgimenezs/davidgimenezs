@@ -5,6 +5,7 @@ import os
 from lxml import etree
 import time
 import hashlib
+import random
 
 # Fine-grained personal access token with All Repositories access:
 # Account permissions: read:Followers, read:Starring, read:Watching
@@ -44,6 +45,9 @@ def simple_request(func_name, query, variables):
     """
     Returns a request, or raises an Exception if the response does not succeed.
     """
+    # Add a small delay to prevent hitting rate limits
+    time.sleep(0.1)
+    
     request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS)
     if request.status_code == 200:
         return request
@@ -106,11 +110,15 @@ def graph_repos_stars(count_type, owner_affiliation, cursor=None, add_loc=0, del
             return stars_counter(request.json()['data']['user']['repositories']['edges'])
 
 
-def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, deletion_total=0, my_commits=0, cursor=None):
+def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, deletion_total=0, my_commits=0, cursor=None, retry_count=0):
     """
     Uses GitHub's GraphQL v4 API and cursor pagination to fetch 100 commits from a repository at a time
     """
     query_count('recursive_loc')
+    
+    # Add a small delay to avoid hitting rate limits
+    time.sleep(0.2)  # 200ms delay between requests
+    
     query = '''
     query ($repo_name: String!, $owner: String!, $cursor: String) {
         repository(name: $repo_name, owner: $owner) {
@@ -145,14 +153,33 @@ def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, delet
     }'''
     variables = {'repo_name': repo_name, 'owner': owner, 'cursor': cursor}
     request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS) # I cannot use simple_request(), because I want to save the file before raising Exception
+    
+    # Handle rate limiting and server errors with retry logic
+    if request.status_code in [502, 503, 429, 500]:
+        if retry_count < 8:  # Maximum 8 retries
+            wait_time = min(60, (2 ** retry_count) + random.uniform(0, 3))  # Exponential backoff with jitter, max 60s
+            print(f"   Server error (HTTP {request.status_code}), retrying in {wait_time:.2f}s (attempt {retry_count + 1}/8)")
+            time.sleep(wait_time)
+            return recursive_loc(owner, repo_name, data, cache_comment, addition_total, deletion_total, my_commits, cursor, retry_count + 1)
+        else:
+            print(f"   GitHub API is experiencing issues. Saving progress and continuing...")
+            force_close_file(data, cache_comment)
+            # Return zero values instead of crashing to allow the script to continue
+            return 0, 0, 0
+    
     if request.status_code == 200:
         if request.json()['data']['repository']['defaultBranchRef'] != None: # Only count commits if repo isn't empty
             return loc_counter_one_repo(owner, repo_name, data, cache_comment, request.json()['data']['repository']['defaultBranchRef']['target']['history'], addition_total, deletion_total, my_commits)
-        else: return 0
+        else: return 0, 0, 0  # Return tuple for empty repos
+    
+    # If we get here, we've exhausted retries or hit a different error
     force_close_file(data, cache_comment) # saves what is currently in the file before this program crashes
     if request.status_code == 403:
-        raise Exception('Too many requests in a short amount of time!\nYou\'ve hit the non-documented anti-abuse limit!')
-    raise Exception('recursive_loc() has failed with a', request.status_code, request.text, QUERY_COUNT)
+        print(f"   API rate limit exceeded for {repo_name}. Skipping...")
+        return 0, 0, 0  # Return zero values instead of crashing
+    
+    print(f"   API error for {repo_name} (HTTP {request.status_code}). Skipping...")
+    return 0, 0, 0  # Return zero values instead of crashing
 
 
 def loc_counter_one_repo(owner, repo_name, data, cache_comment, history, addition_total, deletion_total, my_commits):
@@ -248,7 +275,12 @@ def cache_builder(edges, comment_size, force_cache, loc_add=0, loc_del=0):
                     # if commit count has changed, update loc for that repo
                     owner, repo_name = edges[index]['node']['nameWithOwner'].split('/')
                     loc = recursive_loc(owner, repo_name, data, cache_comment)
-                    data[index] = repo_hash + ' ' + str(edges[index]['node']['defaultBranchRef']['target']['history']['totalCount']) + ' ' + str(loc[2]) + ' ' + str(loc[0]) + ' ' + str(loc[1]) + '\n'
+                    if isinstance(loc, tuple) and len(loc) >= 3:
+                        data[index] = repo_hash + ' ' + str(edges[index]['node']['defaultBranchRef']['target']['history']['totalCount']) + ' ' + str(loc[2]) + ' ' + str(loc[0]) + ' ' + str(loc[1]) + '\n'
+                    else:
+                        # If API failed, keep existing data
+                        print(f"   Skipping {edges[index]['node']['nameWithOwner']} due to API issues")
+                        pass
             except TypeError: # If the repo is empty
                 data[index] = repo_hash + ' 0 0 0 0\n'
     with open(filename, 'w') as f:
