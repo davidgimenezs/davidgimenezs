@@ -352,7 +352,8 @@ def svg_overwrite(filename, age_data, commit_data, star_data, repo_data, contrib
     """
     Parse SVG files and update elements with my age, commits, stars, repositories, and lines written
     """
-    tree = etree.parse(filename)
+    parser = etree.XMLParser()
+    tree = etree.parse(filename, parser)
     root = tree.getroot()
     justify_format(root, 'age_data', age_data, 49)
     justify_format(root, 'commit_data', commit_data, 22)
@@ -495,7 +496,7 @@ if __name__ == '__main__':
         archived_data = add_archive()
         for index in range(len(total_loc)-1):
             total_loc[index] += archived_data[index]
-        contrib_data += archived_data[-1]
+        contrib_data = (contrib_data or 0) + archived_data[-1]
         commit_data += int(archived_data[-2])
 
     for index in range(len(total_loc)-1): total_loc[index] = '{:,}'.format(total_loc[index]) # format added, deleted, and total LOC
