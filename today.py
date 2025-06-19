@@ -1,3 +1,20 @@
+"""
+Enhanced GitHub Profile README Generator
+
+This script has been optimized to handle repositories with large commit histories (19k+ commits).
+Key improvements:
+- Exponential backoff retry mechanism for API failures
+- Rate limiting to prevent 504 errors
+- Commit processing limits to prevent endless loops on huge repos
+- Progress tracking for large repositories
+- Smart repository skipping for extremely large repos
+- Configurable limits via environment variables
+
+Environment Variables:
+- MAX_COMMITS_PER_REPO: Maximum commits to process per repo (default: 25000)
+- REPO_BATCH_SIZE: Number of repos to query at once (default: 40)
+"""
+
 import datetime
 from dateutil import relativedelta
 import requests
@@ -5,6 +22,8 @@ import os
 from lxml import etree
 import time
 import hashlib
+import random
+from functools import wraps
 
 # Fine-grained personal access token with All Repositories access:
 # Account permissions: read:Followers, read:Starring, read:Watching
@@ -13,6 +32,17 @@ import hashlib
 HEADERS = {'authorization': 'token '+ os.environ['ACCESS_TOKEN']}
 USER_NAME = os.environ['USER_NAME'] # 'davidgimenezs'
 QUERY_COUNT = {'user_getter': 0, 'follower_getter': 0, 'graph_repos_stars': 0, 'recursive_loc': 0, 'graph_commits': 0, 'loc_query': 0}
+
+# Rate limiting and retry configuration
+MAX_RETRIES = 5
+BASE_DELAY = 1.0  # Base delay in seconds
+MAX_DELAY = 60.0  # Maximum delay in seconds
+RATE_LIMIT_DELAY = 0.5  # Delay between requests to avoid rate limits
+
+# Large repository handling configuration
+MAX_COMMITS_PER_REPO = int(os.environ.get('MAX_COMMITS_PER_REPO', '25000'))  # Can be overridden via env var
+REPO_BATCH_SIZE = int(os.environ.get('REPO_BATCH_SIZE', '40'))  # Reduced from 60 to prevent timeouts on large repos
+PROGRESS_REPORT_INTERVAL = 1000  # Show progress every N commits for large repos
 
 
 def daily_readme(birthday):
@@ -40,14 +70,72 @@ def format_plural(unit):
     return 's' if unit != 1 else ''
 
 
+def exponential_backoff_retry(max_retries=MAX_RETRIES, base_delay=BASE_DELAY, max_delay=MAX_DELAY):
+    """
+    Decorator for exponential backoff retry logic with jitter
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            for attempt in range(max_retries):
+                try:
+                    result = func(*args, **kwargs)
+                    if attempt > 0:  # Add delay after successful retry
+                        time.sleep(RATE_LIMIT_DELAY)
+                    return result
+                except Exception as e:
+                    if attempt == max_retries - 1:
+                        raise e
+                    
+                    # Calculate delay with exponential backoff and jitter
+                    delay = min(base_delay * (2 ** attempt), max_delay)
+                    jitter = random.uniform(0, delay * 0.1)  # Add up to 10% jitter
+                    total_delay = delay + jitter
+                    
+                    print(f"   Retrying {func.__name__} in {total_delay:.2f}s (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(total_delay)
+            
+            return None
+        return wrapper
+    return decorator
+
+
+def rate_limited_request(func_name, query, variables, timeout=30):
+    """
+    Makes a rate-limited request with timeout and better error handling
+    """
+    time.sleep(RATE_LIMIT_DELAY)  # Rate limiting
+    
+    try:
+        request = requests.post(
+            'https://api.github.com/graphql', 
+            json={'query': query, 'variables': variables}, 
+            headers=HEADERS,
+            timeout=timeout
+        )
+        
+        if request.status_code == 200:
+            return request
+        elif request.status_code == 403:
+            raise Exception(f'Rate limit exceeded in {func_name}. Received 403 status code.')
+        elif request.status_code in [502, 503, 504]:
+            raise Exception(f'Server error in {func_name}. Status: {request.status_code}')
+        else:
+            raise Exception(f'{func_name} failed with status {request.status_code}: {request.text}')
+            
+    except requests.exceptions.Timeout:
+        raise Exception(f'Timeout in {func_name} after {timeout} seconds')
+    except requests.exceptions.RequestException as e:
+        raise Exception(f'Request error in {func_name}: {str(e)}')
+
+
+@exponential_backoff_retry()
 def simple_request(func_name, query, variables):
     """
     Returns a request, or raises an Exception if the response does not succeed.
+    Now includes retry logic and rate limiting.
     """
-    request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS)
-    if request.status_code == 200:
-        return request
-    raise Exception(func_name, ' has failed with a', request.status_code, request.text, QUERY_COUNT)
+    return rate_limited_request(func_name, query, variables)
 
 
 def graph_commits(start_date, end_date):
@@ -106,11 +194,19 @@ def graph_repos_stars(count_type, owner_affiliation, cursor=None, add_loc=0, del
             return stars_counter(request.json()['data']['user']['repositories']['edges'])
 
 
-def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, deletion_total=0, my_commits=0, cursor=None):
+@exponential_backoff_retry()
+def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, deletion_total=0, my_commits=0, cursor=None, processed_commits=0, max_commits=MAX_COMMITS_PER_REPO):
     """
     Uses GitHub's GraphQL v4 API and cursor pagination to fetch 100 commits from a repository at a time
+    Now includes robust error handling, progress tracking, and limits for very large repositories
     """
     query_count('recursive_loc')
+    
+    # Limit processing for very large repos to prevent endless 504 errors
+    if processed_commits >= max_commits:
+        print(f"   Reached commit limit ({max_commits}) for {owner}/{repo_name}, stopping processing")
+        return addition_total, deletion_total, my_commits
+    
     query = '''
     query ($repo_name: String!, $owner: String!, $cursor: String) {
         repository(name: $repo_name, owner: $owner) {
@@ -144,68 +240,94 @@ def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, delet
         }
     }'''
     variables = {'repo_name': repo_name, 'owner': owner, 'cursor': cursor}
-    request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS) # I cannot use simple_request(), because I want to save the file before raising Exception
-    if request.status_code == 200:
-        if request.json()['data']['repository']['defaultBranchRef'] != None: # Only count commits if repo isn't empty
-            return loc_counter_one_repo(owner, repo_name, data, cache_comment, request.json()['data']['repository']['defaultBranchRef']['target']['history'], addition_total, deletion_total, my_commits)
-        else: return 0
-    force_close_file(data, cache_comment) # saves what is currently in the file before this program crashes
-    if request.status_code == 403:
-        raise Exception('Too many requests in a short amount of time!\nYou\'ve hit the non-documented anti-abuse limit!')
-    raise Exception('recursive_loc() has failed with a', request.status_code, request.text, QUERY_COUNT)
+    
+    try:
+        request = rate_limited_request('recursive_loc', query, variables, timeout=45)
+        
+        if request.json()['data']['repository']['defaultBranchRef'] is None:
+            return 0, 0, 0  # Empty repository
+            
+        history = request.json()['data']['repository']['defaultBranchRef']['target']['history']
+        return loc_counter_one_repo(owner, repo_name, data, cache_comment, history, addition_total, deletion_total, my_commits, processed_commits, max_commits)
+        
+    except Exception as e:
+        print(f"   Error processing {owner}/{repo_name}: {str(e)}")
+        force_close_file(data, cache_comment)  # Save what we have so far
+        
+        # For very large repos that consistently fail, return partial results
+        if processed_commits > 0:
+            print(f"   Returning partial results for {owner}/{repo_name} ({processed_commits} commits processed)")
+            return addition_total, deletion_total, my_commits
+        
+        # Re-raise the exception if we couldn't process any commits
+        raise e
 
 
-def loc_counter_one_repo(owner, repo_name, data, cache_comment, history, addition_total, deletion_total, my_commits):
+def loc_counter_one_repo(owner, repo_name, data, cache_comment, history, addition_total, deletion_total, my_commits, processed_commits=0, max_commits=MAX_COMMITS_PER_REPO):
     """
     Recursively call recursive_loc (since GraphQL can only search 100 commits at a time) 
     only adds the LOC value of commits authored by me
+    Now includes progress tracking and commit limits
     """
+    batch_size = len(history['edges'])
+    processed_commits += batch_size
+    
+    # Show progress for large repositories
+    if processed_commits % PROGRESS_REPORT_INTERVAL == 0 or processed_commits > 5000:
+        total_commits = history.get('totalCount', 'unknown')
+        print(f"   Processing {owner}/{repo_name}: {processed_commits}/{total_commits} commits")
+    
     for node in history['edges']:
         if node['node']['author']['user'] == OWNER_ID:
             my_commits += 1
             addition_total += node['node']['additions']
             deletion_total += node['node']['deletions']
 
+    # Check if we should continue or stop due to limits
+    if processed_commits >= max_commits:
+        print(f"   Reached commit limit for {owner}/{repo_name}")
+        return addition_total, deletion_total, my_commits
+        
     if history['edges'] == [] or not history['pageInfo']['hasNextPage']:
         return addition_total, deletion_total, my_commits
-    else: return recursive_loc(owner, repo_name, data, cache_comment, addition_total, deletion_total, my_commits, history['pageInfo']['endCursor'])
+    else: 
+        return recursive_loc(owner, repo_name, data, cache_comment, addition_total, deletion_total, my_commits, history['pageInfo']['endCursor'], processed_commits, max_commits)
 
 
 def loc_query(owner_affiliation, comment_size=0, force_cache=False, cursor=None, edges=[]):
     """
     Uses GitHub's GraphQL v4 API to query all the repositories I have access to (with respect to owner_affiliation)
-    Queries 60 repos at a time, because larger queries give a 502 timeout error and smaller queries send too many
-    requests and also give a 502 error.
+    Now uses optimized batch size to reduce timeouts on repositories with large commit histories.
     Returns the total number of lines of code in all repositories
     """
     query_count('loc_query')
-    query = '''
-    query ($owner_affiliation: [RepositoryAffiliation], $login: String!, $cursor: String) {
-        user(login: $login) {
-            repositories(first: 60, after: $cursor, ownerAffiliations: $owner_affiliation) {
-            edges {
-                node {
-                    ... on Repository {
-                        nameWithOwner
-                        defaultBranchRef {
-                            target {
-                                ... on Commit {
-                                    history {
-                                        totalCount
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                pageInfo {
+    query = f'''
+    query ($owner_affiliation: [RepositoryAffiliation], $login: String!, $cursor: String) {{
+        user(login: $login) {{
+            repositories(first: {REPO_BATCH_SIZE}, after: $cursor, ownerAffiliations: $owner_affiliation) {{
+                edges {{
+                    node {{
+                        ... on Repository {{
+                            nameWithOwner
+                            defaultBranchRef {{
+                                target {{
+                                    ... on Commit {{
+                                        history {{
+                                            totalCount
+                                        }}
+                                    }}
+                                }}
+                            }}
+                        }}
+                    }}
+                }}
+                pageInfo {{
                     endCursor
                     hasNextPage
-                }
-            }
-        }
-    }'''
+                }}
+            }}
+        }}
+    }}'''
     variables = {'owner_affiliation': owner_affiliation, 'login': USER_NAME, 'cursor': cursor}
     request = simple_request(loc_query.__name__, query, variables)
     if request.json()['data']['user']['repositories']['pageInfo']['hasNextPage']:   # If repository data has another page
@@ -244,12 +366,31 @@ def cache_builder(edges, comment_size, force_cache, loc_add=0, loc_del=0):
         repo_hash, commit_count, *__ = data[index].split()
         if repo_hash == hashlib.sha256(edges[index]['node']['nameWithOwner'].encode('utf-8')).hexdigest():
             try:
-                if int(commit_count) != edges[index]['node']['defaultBranchRef']['target']['history']['totalCount']:
+                current_commit_count = edges[index]['node']['defaultBranchRef']['target']['history']['totalCount']
+                if int(commit_count) != current_commit_count:
                     # if commit count has changed, update loc for that repo
                     owner, repo_name = edges[index]['node']['nameWithOwner'].split('/')
-                    loc = recursive_loc(owner, repo_name, data, cache_comment)
-                    data[index] = repo_hash + ' ' + str(edges[index]['node']['defaultBranchRef']['target']['history']['totalCount']) + ' ' + str(loc[2]) + ' ' + str(loc[0]) + ' ' + str(loc[1]) + '\n'
-            except TypeError: # If the repo is empty
+                    
+                    # Skip repositories with extremely large commit histories that are known to cause issues
+                    if current_commit_count > MAX_COMMITS_PER_REPO * 2:  # Double the limit for skipping
+                        print(f"   Skipping {owner}/{repo_name} ({current_commit_count:,} commits - too large)")
+                        # Keep the existing cached data for very large repos
+                        continue
+                    elif current_commit_count > MAX_COMMITS_PER_REPO:
+                        print(f"   Processing large repo {owner}/{repo_name} ({current_commit_count:,} commits) with limits")
+                    
+                    try:
+                        loc = recursive_loc(owner, repo_name, data, cache_comment)
+                        if isinstance(loc, tuple) and len(loc) >= 3:
+                            data[index] = repo_hash + ' ' + str(current_commit_count) + ' ' + str(loc[2]) + ' ' + str(loc[0]) + ' ' + str(loc[1]) + '\n'
+                        else:
+                            print(f"   Warning: Invalid result from recursive_loc for {owner}/{repo_name}")
+                            # Keep existing data if something went wrong
+                    except Exception as e:
+                        print(f"   Failed to process {owner}/{repo_name}: {str(e)}")
+                        # Keep existing cached data when processing fails
+                        continue
+            except (TypeError, ValueError): # If the repo is empty or data is invalid
                 data[index] = repo_hash + ' 0 0 0 0\n'
     with open(filename, 'w') as f:
         f.writelines(cache_comment)
