@@ -5,13 +5,14 @@ import os
 from lxml import etree
 import time
 import hashlib
+import random
 
 # Fine-grained personal access token with All Repositories access:
 # Account permissions: read:Followers, read:Starring, read:Watching
 # Repository permissions: read:Commit statuses, read:Contents, read:Issues, read:Metadata, read:Pull Requests
 # Issues and pull requests permissions not needed at the moment, but may be used in the future
 HEADERS = {'authorization': 'token '+ os.environ['ACCESS_TOKEN']}
-USER_NAME = os.environ['USER_NAME'] # 'Andrew6rant'
+USER_NAME = os.environ['USER_NAME'] # 'davidgimenezs'
 QUERY_COUNT = {'user_getter': 0, 'follower_getter': 0, 'graph_repos_stars': 0, 'recursive_loc': 0, 'graph_commits': 0, 'loc_query': 0}
 
 
@@ -40,14 +41,56 @@ def format_plural(unit):
     return 's' if unit != 1 else ''
 
 
-def simple_request(func_name, query, variables):
+def simple_request(func_name, query, variables, retry_count=0):
     """
     Returns a request, or raises an Exception if the response does not succeed.
     """
-    request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS)
+    # Much more aggressive delay - 1 second between ALL requests
+    time.sleep(1.0)
+    
+    request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables': variables}, headers=HEADERS)
+    
+    # Enhanced error handling with longer waits
+    if request.status_code in [502, 503, 429, 500, 408, 520, 521, 522, 523, 524]:
+        if retry_count < 5:
+            # Much longer exponential backoff - start with 30 seconds
+            wait_time = min(300, 30 * (2 ** retry_count) + random.uniform(0, 10))
+            print(f"   API error {request.status_code} in {func_name}, waiting {wait_time:.1f}s (attempt {retry_count + 1}/5)")
+            time.sleep(wait_time)
+            return simple_request(func_name, query, variables, retry_count + 1)
+        else:
+            print(f"   API consistently failing for {func_name}. Skipping...")
+            # Return empty response to continue execution
+            class MockResponse:
+                def __init__(self):
+                    self.status_code = 200
+                def json(self):
+                    return {
+                        'data': {
+                            'user': {
+                                'repositories': {
+                                    'edges': [],
+                                    'totalCount': 0,
+                                    'pageInfo': {'hasNextPage': False, 'endCursor': None}
+                                },
+                                'contributionsCollection': {
+                                    'contributionCalendar': {'totalContributions': 0}
+                                },
+                                'followers': {'totalCount': 0},
+                                'id': 'unknown',
+                                'createdAt': '2000-01-01T00:00:00Z'
+                            }
+                        }
+                    }
+            return MockResponse()
+    
     if request.status_code == 200:
         return request
-    raise Exception(func_name, ' has failed with a', request.status_code, request.text, QUERY_COUNT)
+    
+    if request.status_code == 401:
+        raise Exception('Bad credentials. Check your GitHub token.')
+    
+    raise Exception(f'{func_name} failed with status {request.status_code}: {request.text}')
 
 
 def graph_commits(start_date, end_date):
@@ -78,7 +121,7 @@ def graph_repos_stars(count_type, owner_affiliation, cursor=None, add_loc=0, del
     query = '''
     query ($owner_affiliation: [RepositoryAffiliation], $login: String!, $cursor: String) {
         user(login: $login) {
-            repositories(first: 100, after: $cursor, ownerAffiliations: $owner_affiliation) {
+            repositories(first: 50, after: $cursor, ownerAffiliations: $owner_affiliation) {
                 totalCount
                 edges {
                     node {
@@ -106,18 +149,22 @@ def graph_repos_stars(count_type, owner_affiliation, cursor=None, add_loc=0, del
             return stars_counter(request.json()['data']['user']['repositories']['edges'])
 
 
-def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, deletion_total=0, my_commits=0, cursor=None):
+def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, deletion_total=0, my_commits=0, cursor=None, retry_count=0):
     """
     Uses GitHub's GraphQL v4 API and cursor pagination to fetch 100 commits from a repository at a time
     """
     query_count('recursive_loc')
+    
+    # Even more aggressive delay for recursive calls - 2 seconds
+    time.sleep(2.0)
+    
     query = '''
     query ($repo_name: String!, $owner: String!, $cursor: String) {
         repository(name: $repo_name, owner: $owner) {
             defaultBranchRef {
                 target {
                     ... on Commit {
-                        history(first: 100, after: $cursor) {
+                        history(first: 25, after: $cursor) {
                             totalCount
                             edges {
                                 node {
@@ -145,14 +192,33 @@ def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, delet
     }'''
     variables = {'repo_name': repo_name, 'owner': owner, 'cursor': cursor}
     request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS) # I cannot use simple_request(), because I want to save the file before raising Exception
+    
+    # Circuit breaker pattern - if we get too many errors, stop trying
+    if request.status_code in [502, 503, 429, 500, 408, 520, 521, 522, 523, 524]:
+        if retry_count < 3:  # Reduced retries but much longer waits
+            # Very long exponential backoff - start with 60 seconds
+            wait_time = min(600, 60 * (2 ** retry_count) + random.uniform(0, 30))
+            print(f"   Server overloaded (HTTP {request.status_code}), waiting {wait_time:.1f}s (attempt {retry_count + 1}/3)")
+            time.sleep(wait_time)
+            return recursive_loc(owner, repo_name, data, cache_comment, addition_total, deletion_total, my_commits, cursor, retry_count + 1)
+        else:
+            print(f"   GitHub API overwhelmed. Skipping repository {repo_name} and continuing...")
+            force_close_file(data, cache_comment)
+            # Return zero values to continue with other repositories
+            return 0, 0, 0
+    
     if request.status_code == 200:
         if request.json()['data']['repository']['defaultBranchRef'] != None: # Only count commits if repo isn't empty
             return loc_counter_one_repo(owner, repo_name, data, cache_comment, request.json()['data']['repository']['defaultBranchRef']['target']['history'], addition_total, deletion_total, my_commits)
-        else: return 0
+        else: return 0, 0, 0  # Return tuple for empty repos
+    
+    # If we get here, we've exhausted retries or hit a different error
     force_close_file(data, cache_comment) # saves what is currently in the file before this program crashes
     if request.status_code == 403:
-        raise Exception('Too many requests in a short amount of time!\nYou\'ve hit the non-documented anti-abuse limit!')
-    raise Exception('recursive_loc() has failed with a', request.status_code, request.text, QUERY_COUNT)
+        raise Exception('Rate limit exceeded. GitHub API access restricted.')
+    
+    print(f"   Unexpected error for {repo_name}: {request.status_code}")
+    return 0, 0, 0  # Continue execution instead of crashing
 
 
 def loc_counter_one_repo(owner, repo_name, data, cache_comment, history, addition_total, deletion_total, my_commits):
@@ -182,7 +248,7 @@ def loc_query(owner_affiliation, comment_size=0, force_cache=False, cursor=None,
     query = '''
     query ($owner_affiliation: [RepositoryAffiliation], $login: String!, $cursor: String) {
         user(login: $login) {
-            repositories(first: 60, after: $cursor, ownerAffiliations: $owner_affiliation) {
+            repositories(first: 30, after: $cursor, ownerAffiliations: $owner_affiliation) {
             edges {
                 node {
                     ... on Repository {
@@ -247,8 +313,17 @@ def cache_builder(edges, comment_size, force_cache, loc_add=0, loc_del=0):
                 if int(commit_count) != edges[index]['node']['defaultBranchRef']['target']['history']['totalCount']:
                     # if commit count has changed, update loc for that repo
                     owner, repo_name = edges[index]['node']['nameWithOwner'].split('/')
+                    print(f"   Updating {repo_name} (commit count changed: {commit_count} -> {edges[index]['node']['defaultBranchRef']['target']['history']['totalCount']})")
                     loc = recursive_loc(owner, repo_name, data, cache_comment)
-                    data[index] = repo_hash + ' ' + str(edges[index]['node']['defaultBranchRef']['target']['history']['totalCount']) + ' ' + str(loc[2]) + ' ' + str(loc[0]) + ' ' + str(loc[1]) + '\n'
+                    if isinstance(loc, tuple) and len(loc) >= 3:
+                        data[index] = repo_hash + ' ' + str(edges[index]['node']['defaultBranchRef']['target']['history']['totalCount']) + ' ' + str(loc[2]) + ' ' + str(loc[0]) + ' ' + str(loc[1]) + '\n'
+                        # Long pause between repository updates
+                        print(f"   Completed {repo_name}. Pausing before next repository...")
+                        time.sleep(5.0)  # 5 second pause between repositories
+                    else:
+                        # If API failed, keep existing data
+                        print(f"   Skipping {edges[index]['node']['nameWithOwner']} due to API issues")
+                        pass
             except TypeError: # If the repo is empty
                 data[index] = repo_hash + ' 0 0 0 0\n'
     with open(filename, 'w') as f:
@@ -320,8 +395,10 @@ def svg_overwrite(filename, age_data, commit_data, star_data, repo_data, contrib
     """
     Parse SVG files and update elements with my age, commits, stars, repositories, and lines written
     """
-    tree = etree.parse(filename)
+    parser = etree.XMLParser()
+    tree = etree.parse(filename, parser)
     root = tree.getroot()
+    justify_format(root, 'age_data', age_data, 49)
     justify_format(root, 'commit_data', commit_data, 22)
     justify_format(root, 'star_data', star_data, 14)
     justify_format(root, 'repo_data', repo_data, 6)
@@ -439,15 +516,15 @@ def formatter(query_type, difference, funct_return=False, whitespace=0):
 
 if __name__ == '__main__':
     """
-    Andrew Grant (Andrew6rant), 2022-2025
+    David Gimenez (davidgimenezs), 2001-2025
     """
     print('Calculation times:')
     # define global variable for owner ID and calculate user's creation date
-    # e.g {'id': 'MDQ6VXNlcjU3MzMxMTM0'} and 2019-11-03T21:15:07Z for username 'Andrew6rant'
+    # e.g {'id': 'MDQ6VXNlcjU3MzMxMTM0'} and 2019-11-03T21:15:07Z for username 'davidgimenezs'
     user_data, user_time = perf_counter(user_getter, USER_NAME)
     OWNER_ID, acc_date = user_data
     formatter('account data', user_time)
-    age_data, age_time = perf_counter(daily_readme, datetime.datetime(2002, 7, 5))
+    age_data, age_time = perf_counter(daily_readme, datetime.datetime(2001, 1, 2))
     formatter('age calculation', age_time)
     total_loc, loc_time = perf_counter(loc_query, ['OWNER', 'COLLABORATOR', 'ORGANIZATION_MEMBER'], 7)
     formatter('LOC (cached)', loc_time) if total_loc[-1] else formatter('LOC (no cache)', loc_time)
@@ -458,11 +535,11 @@ if __name__ == '__main__':
     follower_data, follower_time = perf_counter(follower_getter, USER_NAME)
 
     # several repositories that I've contributed to have since been deleted.
-    if OWNER_ID == {'id': 'MDQ6VXNlcjU3MzMxMTM0'}: # only calculate for user Andrew6rant
+    if OWNER_ID == {'id': 'MDQ6VXNlcjExNDg4MjkzNQ=='}: # only calculate for user davidgimenezs
         archived_data = add_archive()
         for index in range(len(total_loc)-1):
             total_loc[index] += archived_data[index]
-        contrib_data += archived_data[-1]
+        contrib_data = (contrib_data or 0) + archived_data[-1]
         commit_data += int(archived_data[-2])
 
     for index in range(len(total_loc)-1): total_loc[index] = '{:,}'.format(total_loc[index]) # format added, deleted, and total LOC
